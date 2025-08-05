@@ -1,47 +1,48 @@
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { useEffect, useState } from 'react';
 import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { loadSetsByFolder } from '../utils/storage';
 
-export default function SavedSetsScreen({ route }) {
-  const { folder } = route.params; // Folder name passed from navigation
-  const [sets, setSets] = useState([]);
+export default function SavedSetsScreen() {
+  const [savedSets, setSavedSets] = useState([]);
+  const route = useRoute();
   const navigation = useNavigation();
+  const folderName = route.params?.folder || "Default";
 
   useEffect(() => {
     const fetchSets = async () => {
-      const data = await loadSetsByFolder(folder);
-      setSets(data.reverse()); // newest first
+      const sets = await loadSetsByFolder(folderName);
+      setSavedSets(sets.reverse()); // newest first
     };
-    fetchSets();
-  }, [folder]);
+
+    const unsubscribe = navigation.addListener('focus', fetchSets);
+    return unsubscribe;
+  }, [navigation, folderName]);
+
+  const handleNewSet = () => {
+    navigation.navigate('Home'); // Go to Home to create a new set
+  };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>{folder} Sets</Text>
+      <Text style={styles.title}>{folderName} Sets</Text>
 
       <FlatList
-        data={sets}
+        data={savedSets}
         keyExtractor={(item) => item.id.toString()}
         renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.card}
-            onPress={() => navigation.navigate('SetDetails', { set: item })}
-          >
+          <View style={styles.card}>
             <Text style={styles.cardTitle}>{item.title}</Text>
-            <Text style={styles.cardDate}>
-              {new Date(item.createdAt).toLocaleString()}
-            </Text>
+            <Text style={styles.cardDate}>{new Date(item.createdAt).toLocaleString()}</Text>
             <Text>{item.cards.length} cards</Text>
-          </TouchableOpacity>
+          </View>
         )}
+        ListEmptyComponent={<Text>No sets in this folder yet.</Text>}
       />
-      {/* Floating + Button */}
-      <TouchableOpacity
-        style={styles.addButton}
-        onPress={() => navigation.navigate('Home', { folder })}
-      >
-        <Text style={styles.addButtonText}>+</Text>
+
+      {/* Floating "+" Button */}
+      <TouchableOpacity style={styles.fab} onPress={handleNewSet}>
+        <Text style={styles.fabText}>+</Text>
       </TouchableOpacity>
     </View>
   );
@@ -73,20 +74,20 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
   },
-  addButton: {
+  fab: {
     position: 'absolute',
-    bottom: 20,
     right: 20,
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#1E293B',
+    bottom: 20,
+    backgroundColor: '#1E293B', // navy
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 5,
   },
-  addButtonText: {
-    color: '#fff',
+  fabText: {
+    color: '#FACC15', // gold
     fontSize: 28,
     fontWeight: 'bold',
   },
