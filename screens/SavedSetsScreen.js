@@ -1,20 +1,34 @@
-import { useNavigation } from '@react-navigation/native';
-import { useEffect, useState } from 'react';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
+import { useCallback, useState } from 'react';
 import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { loadSetsByFolder } from '../utils/storage';
 
-export default function SavedSetsScreen({ route }) {
-  const { folder } = route.params; // Folder name passed from navigation
-  const [sets, setSets] = useState([]);
+export default function SavedSetsScreen() {
   const navigation = useNavigation();
+  const route = useRoute();
+  const { folder } = route.params; // folder name passed from SavedFoldersScreen
 
-  useEffect(() => {
-    const fetchSets = async () => {
-      const data = await loadSetsByFolder(folder);
-      setSets(data.reverse()); // newest first
-    };
-    fetchSets();
-  }, [folder]);
+  const [sets, setSets] = useState([]);
+
+  const fetchSets = async () => {
+    const data = await loadSetsByFolder(folder);
+    setSets(data.reverse()); // newest first
+  };
+
+  // Auto-refresh whenever screen regains focus
+  useFocusEffect(
+    useCallback(() => {
+      fetchSets();
+    }, [folder])
+  );
+
+  const handleSetPress = (set) => {
+    navigation.navigate('SetDetails', { set });
+  };
+
+  const handleAddSet = () => {
+    navigation.navigate('FlashCard', { folder });
+  };
 
   return (
     <View style={styles.container}>
@@ -26,7 +40,7 @@ export default function SavedSetsScreen({ route }) {
         renderItem={({ item }) => (
           <TouchableOpacity
             style={styles.card}
-            onPress={() => navigation.navigate('SetDetails', { set: item })}
+            onPress={() => handleSetPress(item)}
           >
             <Text style={styles.cardTitle}>{item.title}</Text>
             <Text style={styles.cardDate}>
@@ -35,12 +49,11 @@ export default function SavedSetsScreen({ route }) {
             <Text>{item.cards.length} cards</Text>
           </TouchableOpacity>
         )}
+        ListEmptyComponent={<Text>No sets in this folder yet.</Text>}
       />
+
       {/* Floating + Button */}
-      <TouchableOpacity
-        style={styles.addButton}
-        onPress={() => navigation.navigate('Home', { folder })}
-      >
+      <TouchableOpacity style={styles.addButton} onPress={handleAddSet}>
         <Text style={styles.addButtonText}>+</Text>
       </TouchableOpacity>
     </View>

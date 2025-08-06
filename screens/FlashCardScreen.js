@@ -1,18 +1,27 @@
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { useState } from 'react';
 import { Button, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { generateFlashcardsFromText } from '../utils/ai';
 import { clearAllSets, saveFlashcardSet } from '../utils/storage';
 
-export default function HomeScreen() {
+export default function FlashCardScreen() {
   const navigation = useNavigation();
   const route = useRoute();
   const folder = route.params?.folder || 'Default';
 
   const [inputText, setInputText] = useState('');
   const [flashcards, setFlashcards] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  // Ensure back arrow is always visible on focus (fix disappearing issue)
+  useFocusEffect(() => {
+    navigation.setOptions({ headerBackVisible: true });
+  });
 
   const handleGenerate = async () => {
+    if (loading) return; // prevent double taps
+    setLoading(true);
+
     const cards = await generateFlashcardsFromText(inputText);
 
     if (cards.length > 0) {
@@ -26,6 +35,8 @@ export default function HomeScreen() {
       await saveFlashcardSet(setToSave);
       setFlashcards(cards);
     }
+
+    setLoading(false);
   };
 
   const handleClearStorage = async () => {
@@ -45,17 +56,13 @@ export default function HomeScreen() {
         onChangeText={setInputText}
       />
 
-      <Button title="Generate Flashcards" onPress={handleGenerate} />
+      <Button
+        title={loading ? "Generating..." : "Generate Flashcards"}
+        onPress={handleGenerate}
+        disabled={loading}
+      />
 
-      {/* TEMP: Navigate to folders for testing */}
-      <View style={{ marginTop: 20 }}>
-        <Button
-          title="View Folders"
-          onPress={() => navigation.navigate('SavedFolders')}
-        />
-      </View>
-
-      {/* TEMP: Debug - Clear all storage */}
+      {/* Debug: Clear all storage */}
       <View style={{ marginTop: 20 }}>
         <Button
           title="Clear All Storage (Debug)"

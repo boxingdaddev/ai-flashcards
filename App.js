@@ -1,10 +1,11 @@
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { useEffect, useState } from 'react';
-import HomeScreen from './screens/HomeScreen';
+import FlashCardScreen from './screens/FlashCardScreen';
 import SavedFoldersScreen from './screens/SavedFoldersScreen';
 import SavedSetsScreen from './screens/SavedSetsScreen';
 import SetDetailsScreen from './screens/SetDetailsScreen';
+
 import { createNewFolder, loadFolders } from './utils/storage';
 
 const Stack = createStackNavigator();
@@ -17,10 +18,10 @@ export default function App() {
       const folders = await loadFolders();
 
       if (folders.length === 0) {
-        // No folders yet → create Default and go straight to Home
+        // No folders yet → create Default and go straight to FlashCard screen
         const defaultFolder = await createNewFolder();
         setInitialRoute({
-          name: 'Home',
+          name: 'FlashCard', // changed from 'Home'
           params: { folder: defaultFolder },
         });
       } else {
@@ -44,14 +45,13 @@ export default function App() {
           headerTintColor: '#FACC15',
           headerTitleStyle: { fontWeight: 'bold' },
           headerBackTitleVisible: false,
-          headerBackTitleVisible: false,
-          headerBackTitle: '', // force no text beside back arrow
+          headerBackTitle: '', // ensure arrow-only back button
         }}
       >
         <Stack.Screen
-          name="Home"
-          component={HomeScreen}
-          initialParams={initialRoute.params} // passes folder param to Home
+          name="FlashCard" // renamed from Home
+          component={FlashCardScreen}
+          initialParams={initialRoute.params}
           options={{ title: 'AI Flashcards' }}
         />
         <Stack.Screen
@@ -60,14 +60,14 @@ export default function App() {
           options={{ title: 'Folders' }}
         />
         <Stack.Screen
-          name="SetDetails"
-          component={SetDetailsScreen}
-          options={{ title: 'Set Details' }}
-        />
-        <Stack.Screen
           name="SavedSets"
           component={SavedSetsScreen}
           options={{ title: 'Saved Sets' }}
+        />
+        <Stack.Screen
+          name="SetDetails"
+          component={SetDetailsScreen}
+          options={{ title: 'Set Details' }}
         />
       </Stack.Navigator>
     </NavigationContainer>
