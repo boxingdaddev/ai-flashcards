@@ -51,11 +51,17 @@ export async function loadSetsByFolder(folderName) {
 export async function loadFolders() {
   try {
     const allSets = await loadFlashcardSets();
-    const folders = [...new Set(allSets.map(set => set.folder || "Default"))];
-    return folders;
+    const folderSet = new Set(allSets.map(set => set.folder || "Default"));
+
+    // Ensure "Default" always exists
+    if (folderSet.size === 0) {
+      folderSet.add("Default");
+    }
+
+    return Array.from(folderSet);
   } catch (error) {
     console.error("Error loading folders:", error);
-    return [];
+    return ["Default"];
   }
 }
 
@@ -66,12 +72,10 @@ export async function loadFolders() {
 export async function createNewFolder() {
   const folders = await loadFolders();
 
-  // If no folders exist, create "Default"
   if (folders.length === 0) {
     return "Default";
   }
 
-  // Extract numeric suffixes from existing "Default X"
   const defaultFolders = folders
     .filter(f => f.startsWith("Default"))
     .map(f => {
@@ -79,7 +83,6 @@ export async function createNewFolder() {
       return match ? parseInt(match[1]) : 1;
     });
 
-  // Find next available number
   const nextNumber = defaultFolders.length > 0
     ? Math.max(...defaultFolders) + 1
     : 2;
@@ -98,3 +101,47 @@ export async function clearAllSets() {
     console.error("Error clearing flashcard sets:", error);
   }
 }
+
+/**
+ * Save all sets (internal use)
+ */
+async function saveAllSets(sets) {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(sets));
+  } catch (error) {
+    console.error("Error saving sets:", error);
+  }
+}
+
+/**
+ * Delete a folder and all its sets
+ */
+export const deleteFolder = async (folderName) => {
+  try {
+    const allSets = await loadFlashcardSets();
+
+    // Remove sets belonging to this folder
+    const updatedSets = allSets.filter(set => set.folder !== folderName);
+
+    await saveAllSets(updatedSets);
+  } catch (error) {
+    console.error('Error deleting folder:', error);
+  }
+};
+
+/**
+ * Delete a single set
+ */
+export const deleteSet = async (folderName, setId) => {
+  try {
+    const allSets = await loadFlashcardSets();
+
+    const updatedSets = allSets.filter(
+      set => !(set.folder === folderName && set.id === setId)
+    );
+
+    await saveAllSets(updatedSets);
+  } catch (error) {
+    console.error('Error deleting set:', error);
+  }
+};

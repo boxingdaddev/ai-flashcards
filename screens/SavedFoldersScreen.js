@@ -1,13 +1,14 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useEffect, useState } from 'react';
-import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { createNewFolder, loadFolders, saveFlashcardSet } from '../utils/storage';
+import { Alert, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Swipeable } from 'react-native-gesture-handler';
+import { createNewFolder, deleteFolder, loadFolders, saveFlashcardSet } from '../utils/storage';
 
 export default function SavedFoldersScreen() {
   const [folders, setFolders] = useState([]);
   const navigation = useNavigation();
 
-  // Load folders on mount and whenever we come back to this screen
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       fetchFolders();
@@ -24,7 +25,6 @@ export default function SavedFoldersScreen() {
   const handleAddFolder = async () => {
     const newFolderName = await createNewFolder();
 
-    // Create a dummy set to ensure folder appears in storage
     const dummySet = {
       id: Date.now(),
       folder: newFolderName,
@@ -41,25 +41,65 @@ export default function SavedFoldersScreen() {
     navigation.navigate('SavedSets', { folder: folderName });
   };
 
+  const handleDeleteFolder = (folderName) => {
+    Alert.alert(
+      'Delete Folder?',
+      'This will remove the folder and all sets inside.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            await deleteFolder(folderName);
+            const updatedFolders = await loadFolders();
+            setFolders([...updatedFolders]); // refresh UI
+          },
+        },
+      ]
+    );
+  };
+
+  const renderRightActions = (onPress) => (
+    <TouchableOpacity
+      style={{
+        width: '25%',
+        backgroundColor: 'red',
+        justifyContent: 'center',
+        alignItems: 'center',
+      }}
+      onPress={onPress}
+    >
+      <Ionicons name="trash-outline" size={24} color="#fff" />
+    </TouchableOpacity>
+  );
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Folders</Text>
 
       <FlatList
+        showsVerticalScrollIndicator={false}
         data={folders}
         keyExtractor={(item, index) => `${item}-${index}`}
         renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.folderCard}
-            onPress={() => handleFolderPress(item)}
+          <Swipeable
+            renderRightActions={() =>
+              renderRightActions(() => handleDeleteFolder(item))
+            }
           >
-            <Text style={styles.folderName}>{item}</Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => handleFolderPress(item)}
+            >
+              <View style={styles.row}>
+                <Text>{item}</Text>
+              </View>
+            </TouchableOpacity>
+          </Swipeable>
         )}
         ListEmptyComponent={<Text>No folders yet. Generate your first set!</Text>}
       />
 
-      {/* Floating Add Button */}
       <TouchableOpacity style={styles.addButton} onPress={handleAddFolder}>
         <Text style={styles.addButtonText}>+</Text>
       </TouchableOpacity>
@@ -68,6 +108,15 @@ export default function SavedFoldersScreen() {
 }
 
 const styles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 15,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ccc',
+    width: '100%',
+  },
   container: {
     flex: 1,
     padding: 20,

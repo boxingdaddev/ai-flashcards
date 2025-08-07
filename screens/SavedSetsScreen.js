@@ -1,12 +1,15 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { useCallback, useState } from 'react';
-import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { loadSetsByFolder } from '../utils/storage';
+import { Alert, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Swipeable } from 'react-native-gesture-handler';
+import { deleteSet, loadSetsByFolder } from '../utils/storage';
 
 export default function SavedSetsScreen() {
   const navigation = useNavigation();
   const route = useRoute();
-  const { folder } = route.params; // folder name passed from SavedFoldersScreen
+  const { folder: folderName } = route.params;
+  const folder = folderName;
 
   const [sets, setSets] = useState([]);
 
@@ -15,7 +18,6 @@ export default function SavedSetsScreen() {
     setSets(data.reverse()); // newest first
   };
 
-  // Auto-refresh whenever screen regains focus
   useFocusEffect(
     useCallback(() => {
       fetchSets();
@@ -30,6 +32,39 @@ export default function SavedSetsScreen() {
     navigation.navigate('FlashCard', { folder });
   };
 
+  const handleDeleteSet = (folderName, setId) => {
+    Alert.alert(
+      'Delete Set?',
+      'Are you sure you want to delete this flashcard set?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            await deleteSet(folderName, setId);
+            const updatedSets = await loadSetsByFolder(folderName);
+            setSets([...updatedSets]); // ✅ force update
+          },
+        },
+      ]
+    );
+  };
+
+  const renderRightActions = (onPress) => (
+    <TouchableOpacity
+      style={{
+        width: '25%',
+        backgroundColor: 'red',
+        justifyContent: 'center',
+        alignItems: 'center',
+      }}
+      onPress={onPress}
+    >
+      <Ionicons name="trash-outline" size={24} color="#fff" />
+    </TouchableOpacity>
+  );
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>{folder} Sets</Text>
@@ -38,21 +73,24 @@ export default function SavedSetsScreen() {
         data={sets}
         keyExtractor={(item) => item.id.toString()}
         renderItem={({ item }) => (
-          <TouchableOpacity
-            style={styles.card}
-            onPress={() => handleSetPress(item)}
+          <Swipeable
+            renderRightActions={() =>
+              renderRightActions(() => handleDeleteSet(folderName, item.id))
+            }
           >
-            <Text style={styles.cardTitle}>{item.title}</Text>
-            <Text style={styles.cardDate}>
-              {new Date(item.createdAt).toLocaleString()}
-            </Text>
-            <Text>{item.cards.length} cards</Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('SetDetails', { set: item })}
+            >
+              <View style={styles.row}>
+                <Text>{item.title}</Text>
+              </View>
+            </TouchableOpacity>
+          </Swipeable>
         )}
         ListEmptyComponent={<Text>No sets in this folder yet.</Text>}
+        showsVerticalScrollIndicator={false}
       />
 
-      {/* Floating + Button */}
       <TouchableOpacity style={styles.addButton} onPress={handleAddSet}>
         <Text style={styles.addButtonText}>+</Text>
       </TouchableOpacity>
@@ -61,6 +99,15 @@ export default function SavedSetsScreen() {
 }
 
 const styles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 15,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ccc',
+    width: '100%',
+  },
   container: {
     flex: 1,
     padding: 20,
@@ -70,21 +117,6 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 20,
-  },
-  card: {
-    padding: 15,
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    marginBottom: 10,
-  },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  cardDate: {
-    fontSize: 12,
-    color: '#666',
   },
   addButton: {
     position: 'absolute',

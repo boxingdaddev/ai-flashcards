@@ -1,6 +1,7 @@
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { useEffect, useState } from 'react';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import FlashCardScreen from './screens/FlashCardScreen';
 import SavedFoldersScreen from './screens/SavedFoldersScreen';
 import SavedSetsScreen from './screens/SavedSetsScreen';
@@ -37,6 +38,7 @@ export default function App() {
   if (!initialRoute) return null;
 
   return (
+  <GestureHandlerRootView style={{ flex: 1 }}>
     <NavigationContainer>
       <Stack.Navigator
         initialRouteName={initialRoute.name}
@@ -49,7 +51,7 @@ export default function App() {
         }}
       >
         <Stack.Screen
-          name="FlashCard" // renamed from Home
+          name="FlashCard"
           component={FlashCardScreen}
           initialParams={initialRoute.params}
           options={{ title: 'AI Flashcards' }}
@@ -71,5 +73,6 @@ export default function App() {
         />
       </Stack.Navigator>
     </NavigationContainer>
-  );
+  </GestureHandlerRootView>
+);
 }
