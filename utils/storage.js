@@ -1,17 +1,17 @@
-// utils/storage.js
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const STORAGE_KEY = '@flashcard_sets';
+const STORAGE_KEY = "@flashcard_sets";
+const CARD_COUNT_KEY = "@total_cards_generated";
 
 /**
  * Save a new flashcard set
  * Each set: { id, folder, title, cards[], createdAt }
+ * - NO card count logic here (handled in FlashCardScreen)
  */
 export async function saveFlashcardSet(set) {
   try {
     const existing = await AsyncStorage.getItem(STORAGE_KEY);
     const parsed = existing ? JSON.parse(existing) : [];
-
     parsed.push(set);
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
   } catch (error) {
@@ -19,9 +19,6 @@ export async function saveFlashcardSet(set) {
   }
 }
 
-/**
- * Load all flashcard sets
- */
 export async function loadFlashcardSets() {
   try {
     const existing = await AsyncStorage.getItem(STORAGE_KEY);
@@ -32,32 +29,21 @@ export async function loadFlashcardSets() {
   }
 }
 
-/**
- * Load sets by folder name
- */
 export async function loadSetsByFolder(folderName) {
   try {
     const allSets = await loadFlashcardSets();
-    return allSets.filter(set => set.folder === folderName);
+    return allSets.filter((set) => set.folder === folderName);
   } catch (error) {
     console.error("Error loading sets by folder:", error);
     return [];
   }
 }
 
-/**
- * Get unique folder names
- */
 export async function loadFolders() {
   try {
     const allSets = await loadFlashcardSets();
-    const folderSet = new Set(allSets.map(set => set.folder || "Default"));
-
-    // Ensure "Default" always exists
-    if (folderSet.size === 0) {
-      folderSet.add("Default");
-    }
-
+    const folderSet = new Set(allSets.map((set) => set.folder || "Default"));
+    if (folderSet.size === 0) folderSet.add("Default");
     return Array.from(folderSet);
   } catch (error) {
     console.error("Error loading folders:", error);
@@ -65,34 +51,23 @@ export async function loadFolders() {
   }
 }
 
-/**
- * Auto-create new folder name
- * Default, Default 2, Default 3...
- */
 export async function createNewFolder() {
   const folders = await loadFolders();
-
-  if (folders.length === 0) {
-    return "Default";
-  }
+  if (folders.length === 0) return "Default";
 
   const defaultFolders = folders
-    .filter(f => f.startsWith("Default"))
-    .map(f => {
+    .filter((f) => f.startsWith("Default"))
+    .map((f) => {
       const match = f.match(/Default (\d+)/);
       return match ? parseInt(match[1]) : 1;
     });
 
-  const nextNumber = defaultFolders.length > 0
-    ? Math.max(...defaultFolders) + 1
-    : 2;
+  const nextNumber =
+    defaultFolders.length > 0 ? Math.max(...defaultFolders) + 1 : 2;
 
   return `Default ${nextNumber}`;
 }
 
-/**
- * Clear all flashcard sets (for dev/debug)
- */
 export async function clearAllSets() {
   try {
     await AsyncStorage.removeItem(STORAGE_KEY);
@@ -102,9 +77,6 @@ export async function clearAllSets() {
   }
 }
 
-/**
- * Save all sets (internal use)
- */
 async function saveAllSets(sets) {
   try {
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(sets));
@@ -113,35 +85,62 @@ async function saveAllSets(sets) {
   }
 }
 
-/**
- * Delete a folder and all its sets
- */
 export const deleteFolder = async (folderName) => {
   try {
     const allSets = await loadFlashcardSets();
-
-    // Remove sets belonging to this folder
-    const updatedSets = allSets.filter(set => set.folder !== folderName);
-
+    const updatedSets = allSets.filter((set) => set.folder !== folderName);
     await saveAllSets(updatedSets);
   } catch (error) {
-    console.error('Error deleting folder:', error);
+    console.error("Error deleting folder:", error);
   }
 };
 
-/**
- * Delete a single set
- */
 export const deleteSet = async (folderName, setId) => {
   try {
     const allSets = await loadFlashcardSets();
-
     const updatedSets = allSets.filter(
-      set => !(set.folder === folderName && set.id === setId)
+      (set) => !(set.folder === folderName && set.id === setId)
     );
-
     await saveAllSets(updatedSets);
   } catch (error) {
-    console.error('Error deleting set:', error);
+    console.error("Error deleting set:", error);
   }
 };
+
+export async function getTotalCardsGenerated() {
+  try {
+    const stored = await AsyncStorage.getItem(CARD_COUNT_KEY);
+    return stored ? parseInt(stored, 10) : 0;
+  } catch (error) {
+    console.error("Error getting card count:", error);
+    return 0;
+  }
+}
+
+export async function clearTotalCardsGenerated() {
+  try {
+    await AsyncStorage.removeItem(CARD_COUNT_KEY);
+    console.log("Total card generation counter reset.");
+  } catch (error) {
+    console.error("Error clearing total card counter:", error);
+  }
+}
+
+export async function incrementTotalCardsGenerated(amount) {
+  try {
+    const current = await getTotalCardsGenerated();
+    const updated = current + amount;
+    await AsyncStorage.setItem(CARD_COUNT_KEY, updated.toString());
+  } catch (error) {
+    console.error("Error incrementing card count:", error);
+  }
+}
+
+export async function clearCardCounter() {
+  try {
+    await AsyncStorage.removeItem(CARD_COUNT_KEY);
+    console.log("Card counter cleared");
+  } catch (error) {
+    console.error("Error clearing card counter:", error);
+  }
+}
