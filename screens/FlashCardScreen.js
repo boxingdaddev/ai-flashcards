@@ -11,11 +11,20 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   TouchableWithoutFeedback,
   View,
 } from "react-native";
 import { generateFlashcardsFromText } from "../utils/ai";
-import { clearAllSets, saveFlashcardSet } from "../utils/storage";
+import {
+  clearAllSets,
+  clearTotalCardsGenerated,
+  getTotalCardsGenerated,
+  incrementTotalCardsGenerated,
+  saveFlashcardSet,
+} from "../utils/storage";
+
+const CARD_LIMIT = 200;
 
 export default function FlashCardScreen() {
   const navigation = useNavigation();
@@ -26,7 +35,6 @@ export default function FlashCardScreen() {
   const [flashcards, setFlashcards] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // Ensure back arrow is always visible on focus (fix disappearing issue)
   useFocusEffect(
     React.useCallback(() => {
       navigation.setOptions({ headerBackVisible: true });
@@ -35,9 +43,17 @@ export default function FlashCardScreen() {
 
   const handleGenerate = async () => {
     if (loading) return;
-
     Keyboard.dismiss();
     setLoading(true);
+
+    const totalCards = await getTotalCardsGenerated();
+    if (totalCards >= CARD_LIMIT) {
+      alert(
+        "You've reached the 200-card limit for free users.\nUpgrade to unlock unlimited generation."
+      );
+      setLoading(false);
+      return;
+    }
 
     const cards = await generateFlashcardsFromText(inputText);
 
@@ -46,14 +62,13 @@ export default function FlashCardScreen() {
         id: Date.now(),
         folder,
         title: inputText.substring(0, 30) || "Untitled",
-        cards: cards,
+        cards,
         createdAt: new Date().toISOString(),
       };
 
       await saveFlashcardSet(setToSave);
+      await incrementTotalCardsGenerated(cards.length);
       setFlashcards(cards);
-
-      // ✅ Go directly to SetDetailsScreen with new set
       navigation.navigate("SetDetails", { set: setToSave });
     }
 
@@ -65,14 +80,22 @@ export default function FlashCardScreen() {
     alert("All flashcard data cleared!");
   };
 
+  const handleDevReset = async () => {
+    await clearTotalCardsGenerated();
+    const newValue = await getTotalCardsGenerated();
+    console.log("💥 Reset value:", newValue); // should log 0
+    alert("Dev counter reset!");
+  };
+
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
       <ScrollView
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.title}>AI Flashcards ({folder})</Text>
-
+        <Text style={styles.title}>
+          Generate Flashcards {"\n"} ({folder})
+        </Text>
         <TextInput
           style={styles.input}
           placeholder="Paste text or notes here..."
@@ -80,14 +103,11 @@ export default function FlashCardScreen() {
           value={inputText}
           onChangeText={setInputText}
         />
-
         <Button
           title={loading ? "Generating..." : "Generate Flashcards"}
           onPress={handleGenerate}
           disabled={loading}
         />
-
-        {/* Debug: Clear all storage */}
         <View style={{ marginTop: 20 }}>
           <Button
             title="Clear All Storage (Debug)"
@@ -95,6 +115,10 @@ export default function FlashCardScreen() {
             onPress={handleClearStorage}
           />
         </View>
+
+        <TouchableOpacity onLongPress={handleDevReset}>
+          <Text style={styles.devReset}>(Long press to reset dev counter)</Text>
+        </TouchableOpacity>
 
         {flashcards.length > 0 && (
           <View style={styles.result}>
@@ -132,5 +156,11 @@ const styles = StyleSheet.create({
   },
   result: {
     marginTop: 20,
+  },
+  devReset: {
+    marginTop: 12,
+    fontSize: 12,
+    color: "#888",
+    textAlign: "center",
   },
 });

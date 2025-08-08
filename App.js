@@ -32,7 +32,7 @@ export default function App() {
           <Stack.Screen
             name="FlashCard"
             component={FlashCardScreen}
-            options={{ title: "AI Flashcards" }}
+            options={{ title: "Generate Flashcards" }}
           />
           <Stack.Screen
             name="SavedFolders"
@@ -42,12 +42,12 @@ export default function App() {
           <Stack.Screen
             name="SavedSets"
             component={SavedSetsScreen}
-            options={{ title: "Saved Flashcards" }}
+            options={{ title: "Saved Flashcard Sets" }}
           />
           <Stack.Screen
             name="SetDetails"
             component={SetDetailsScreen}
-            options={{ title: "Flashcards" }}
+            options={{ headerShown: false }} // FULLSCREEN
           />
         </Stack.Navigator>
       </NavigationContainer>
