@@ -1,0 +1,58 @@
+name: Auto-add v0.3.1 Issues to Project
+
+on:
+  issues:
+    types: [opened, labeled]
+
+jobs:
+  add-to-project:
+    # Only run when the label v0.3.1 is applied or the issue is created with it
+    if: >
+      contains(github.event.issue.labels.*.name, 'v0.3.1') ||
+      github.event.label.name == 'v0.3.1'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+      projects: write
+
+    steps:
+      - name: Get Project ID
+        id: get_project
+        run: |
+          OWNER_LOGIN="${{ github.repository_owner }}"
+          PROJECT_TITLE="StudyBuddy v0.3.1"
+          # Fetch Projects v2 for the user
+          PROJECT_ID=$(gh api graphql -f login="$OWNER_LOGIN" -f query='
+            query($login:String!) {
+              user(login:$login) {
+                projectsV2(first:100) {
+                  nodes { id title number }
+                }
+              }
+            }' --jq ".data.user.projectsV2.nodes[] | select(.title==\"$PROJECT_TITLE\") | .id")
+          if [ -z "$PROJECT_ID" ]; then
+            echo "Project not found"
+            exit 1
+          fi
+          echo "project_id=$PROJECT_ID" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Add Issue to Project
+        run: |
+          ISSUE_NODE_ID=$(gh api graphql -f owner="${{ github.repository_owner }}" -f repo="$(basename ${{ github.repository }})" -F number="${{ github.event.issue.number }}" -f query='
+            query($owner:String!, $repo:String!, $number:Int!) {
+              repository(owner:$owner, name:$repo) {
+                issue(number:$number) { id }
+              }
+            }' --jq '.data.repository.issue.id')
+
+          gh api graphql -F projectId="${{ steps.get_project.outputs.project_id }}" -F contentId="$ISSUE_NODE_ID" -f query='
+            mutation($projectId:ID!, $contentId:ID!) {
+              addProjectV2ItemById(input:{projectId:$projectId, contentId:$contentId}) {
+                item { id }
+              }
+            }'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
