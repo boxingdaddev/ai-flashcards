@@ -1,3 +1,4 @@
+import AppScreen from "@/components/AppScreen";
 import { Ionicons } from "@expo/vector-icons";
 import {
   useFocusEffect,
@@ -14,7 +15,6 @@ import {
   View,
 } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
-
 import RenameModal from "../components/RenameModal";
 import { getNextAvailableName, normalizeSpace } from "../utils/naming.js";
 
@@ -168,37 +168,39 @@ export default function SavedSetsScreen() {
   const totalCards = sets.reduce((sum, set) => sum + set.cards.length, 0);
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>{folder} - Sets</Text>
+    <AppScreen>
+      <View style={styles.container}>
+        <Text style={styles.title}>{folder} - Sets</Text>
 
-      <FlatList
-        data={sets}
-        keyExtractor={(item) => item.id.toString()}
-        renderItem={renderItem}
-        ListFooterComponent={() =>
-          sets.length > 0 ? (
-            <Text style={styles.totalCounter}>
-              Total Cards in All Sets: {totalCards}
-            </Text>
-          ) : null
-        }
-        ListEmptyComponent={<Text>No sets in this folder yet.</Text>}
-        showsVerticalScrollIndicator={false}
-      />
+        <FlatList
+          data={sets}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={renderItem}
+          ListFooterComponent={() =>
+            sets.length > 0 ? (
+              <Text style={styles.totalCounter}>
+                Total Cards in All Sets: {totalCards}
+              </Text>
+            ) : null
+          }
+          ListEmptyComponent={<Text>No sets in this folder yet.</Text>}
+          showsVerticalScrollIndicator={false}
+        />
 
-      <TouchableOpacity style={styles.addButton} onPress={handleAddSet}>
-        <Text style={styles.addButtonText}>+</Text>
-      </TouchableOpacity>
+        <TouchableOpacity style={styles.addButton} onPress={handleAddSet}>
+          <Text style={styles.addButtonText}>+</Text>
+        </TouchableOpacity>
 
-      <RenameModal
-        visible={modalVisible}
-        title="Rename Set"
-        message="Enter a new name for this set:"
-        initialValue={modalInitial}
-        onCancel={closeRename}
-        onConfirm={confirmRename}
-      />
-    </View>
+        <RenameModal
+          visible={modalVisible}
+          title="Rename Set"
+          message="Enter a new name for this set:"
+          initialValue={modalInitial}
+          onCancel={closeRename}
+          onConfirm={confirmRename}
+        />
+      </View>
+    </AppScreen>
   );
 }
 

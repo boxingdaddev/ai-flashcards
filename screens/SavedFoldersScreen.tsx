@@ -1,7 +1,7 @@
-import { useThemeColor } from "@/hooks/useThemeColor";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
-import { useEffect, useState } from "react";
+import { StackNavigationProp } from "@react-navigation/stack";
+import React, { useEffect, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -12,6 +12,8 @@ import {
 } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
 
+import AppScreen from "@/components/AppScreen";
+import { RootStackParamList } from "@/screens/navigation/types";
 import RenameModal from "../components/RenameModal";
 import { getNextAvailableName, normalizeSpace } from "../utils/naming.js";
 
@@ -25,25 +27,27 @@ import {
   renameFolder as storageRenameFolder,
 } from "../utils/storage";
 
+type SavedFoldersNav = StackNavigationProp<RootStackParamList, "SavedFolders">;
+
 export default function SavedFoldersScreen() {
-  const backgroundColor = useThemeColor({}, "background");
-  const [folders, setFolders] = useState([]);
+  const navigation = useNavigation<SavedFoldersNav>();
+  const [folders, setFolders] = useState<string[]>([]);
   const [usageCount, setUsageCount] = useState(0);
-  const navigation = useNavigation();
 
   // Modal state
   const [modalVisible, setModalVisible] = useState(false);
   const [modalTitle, setModalTitle] = useState("");
   const [modalMessage, setModalMessage] = useState("");
   const [modalInitial, setModalInitial] = useState("");
-  const [modalMode, setModalMode] = useState(null); // "create" | "rename"
-  const [renameTarget, setRenameTarget] = useState(null); // oldName for rename
+  const [modalMode, setModalMode] = useState<null | "create" | "rename">(null);
+  const [renameTarget, setRenameTarget] = useState<string | null>(null);
 
   useEffect(() => {
     const unsub = navigation.addListener("focus", () => {
       fetchFolders();
       fetchUsageCount();
     });
+    // initial load
     fetchFolders();
     fetchUsageCount();
     return unsub;
@@ -71,7 +75,7 @@ export default function SavedFoldersScreen() {
   };
 
   // --- Rename Folder flow ---
-  const handleRenameFolder = async (oldName) => {
+  const handleRenameFolder = async (oldName: string) => {
     setModalTitle("Rename Folder");
     setModalMessage(`Rename "${oldName}" to:`);
     setModalInitial(oldName);
@@ -84,7 +88,7 @@ export default function SavedFoldersScreen() {
     setModalVisible(false);
   };
 
-  const onModalConfirm = async (text) => {
+  const onModalConfirm = async (text: string) => {
     const input = normalizeSpace(text);
     setModalVisible(false);
 
@@ -116,11 +120,11 @@ export default function SavedFoldersScreen() {
     }
   };
 
-  const handleFolderPress = (folderName) => {
+  const handleFolderPress = (folderName: string) => {
     navigation.navigate("SavedSets", { folder: folderName });
   };
 
-  const handleDeleteFolder = (folderName) => {
+  const handleDeleteFolder = (folderName: string) => {
     Alert.alert(
       "Delete Folder?",
       "This will remove the folder and all sets inside.",
@@ -138,7 +142,7 @@ export default function SavedFoldersScreen() {
     );
   };
 
-  const renderRightActions = (onDelete, onRename) => (
+  const renderRightActions = (onDelete: () => void, onRename: () => void) => (
     <View style={{ flexDirection: "row", width: "40%" }}>
       <TouchableOpacity
         style={{
@@ -166,53 +170,55 @@ export default function SavedFoldersScreen() {
   );
 
   return (
-    <View style={[styles.container, { backgroundColor }]}>
-      <View style={styles.titleRow}>
-        <Text style={styles.title}>Folders</Text>
-        <Text style={styles.usage}>{usageCount}/200</Text>
-      </View>
+    <AppScreen>
+      <View style={styles.container}>
+        <View style={styles.titleRow}>
+          <Text style={styles.title}>Folders</Text>
+          <Text style={styles.usage}>{usageCount}/200</Text>
+        </View>
 
-      <FlatList
-        showsVerticalScrollIndicator={false}
-        data={folders}
-        keyExtractor={(item, index) => `${item}-${index}`}
-        renderItem={({ item }) => (
-          <Swipeable
-            renderRightActions={() =>
-              renderRightActions(
-                () => handleDeleteFolder(item),
-                () => handleRenameFolder(item)
-              )
-            }
-          >
-            <TouchableOpacity
-              onPress={() => handleFolderPress(item)}
-              onLongPress={() => handleRenameFolder(item)}
+        <FlatList
+          showsVerticalScrollIndicator={false}
+          data={folders}
+          keyExtractor={(item, index) => `${item}-${index}`}
+          renderItem={({ item }) => (
+            <Swipeable
+              renderRightActions={() =>
+                renderRightActions(
+                  () => handleDeleteFolder(item),
+                  () => handleRenameFolder(item)
+                )
+              }
             >
-              <View style={styles.row}>
-                <Text>{item}</Text>
-              </View>
-            </TouchableOpacity>
-          </Swipeable>
-        )}
-        ListEmptyComponent={
-          <Text>No folders yet. Generate your first set!</Text>
-        }
-      />
+              <TouchableOpacity
+                onPress={() => handleFolderPress(item)}
+                onLongPress={() => handleRenameFolder(item)}
+              >
+                <View style={styles.row}>
+                  <Text>{item}</Text>
+                </View>
+              </TouchableOpacity>
+            </Swipeable>
+          )}
+          ListEmptyComponent={
+            <Text>No folders yet. Generate your first set!</Text>
+          }
+        />
 
-      <TouchableOpacity style={styles.addButton} onPress={handleAddFolder}>
-        <Text style={styles.addButtonText}>+</Text>
-      </TouchableOpacity>
+        <TouchableOpacity style={styles.addButton} onPress={handleAddFolder}>
+          <Text style={styles.addButtonText}>+</Text>
+        </TouchableOpacity>
 
-      <RenameModal
-        visible={modalVisible}
-        title={modalTitle}
-        message={modalMessage}
-        initialValue={modalInitial}
-        onCancel={onModalCancel}
-        onConfirm={onModalConfirm}
-      />
-    </View>
+        <RenameModal
+          visible={modalVisible}
+          title={modalTitle}
+          message={modalMessage}
+          initialValue={modalInitial}
+          onCancel={onModalCancel}
+          onConfirm={onModalConfirm}
+        />
+      </View>
+    </AppScreen>
   );
 }
 
@@ -226,7 +232,7 @@ const styles = StyleSheet.create({
     borderBottomColor: "#ccc",
     width: "100%",
   },
-  container: { flex: 1, padding: 20, backgroundColor: "#fff" },
+  container: { flex: 1, padding: 20 },
   titleRow: {
     flexDirection: "row",
     justifyContent: "space-between",
