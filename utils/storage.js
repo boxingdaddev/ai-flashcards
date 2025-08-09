@@ -107,6 +107,34 @@ export const deleteSet = async (folderName, setId) => {
   }
 };
 
+export async function getAllFolderNamesExcluding(excludedFolder) {
+  const folders = await loadFolders();
+  return folders.filter((f) => f !== excludedFolder);
+}
+
+// rename folder by updating all sets with that folder name
+export async function renameFolder(oldName, newName) {
+  const raw = await AsyncStorage.getItem(STORAGE_KEY);
+  const sets = raw ? JSON.parse(raw) : [];
+  const updated = sets.map((s) =>
+    s.folder === oldName ? { ...s, folder: newName } : s
+  );
+  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+}
+
+export async function getNextDefaultFolderName() {
+  const folders = await loadFolders();
+  if (folders.length === 0) return "Default";
+  const nums = folders
+    .filter((f) => f.startsWith("Default"))
+    .map((f) => {
+      const m = f.match(/Default (\d+)/);
+      return m ? parseInt(m[1], 10) : 1;
+    });
+  const next = nums.length ? Math.max(...nums) + 1 : 2;
+  return `Default ${next}`;
+}
+
 export async function getTotalCardsGenerated() {
   try {
     const stored = await AsyncStorage.getItem(CARD_COUNT_KEY);
@@ -142,5 +170,41 @@ export async function clearCardCounter() {
     console.log("Card counter cleared");
   } catch (error) {
     console.error("Error clearing card counter:", error);
+  }
+}
+
+/* =========================================================
+ *                  NEW: SET HELPERS
+ * =======================================================*/
+
+// Get all set titles in a folder (for collision-safe naming)
+// excludeSetId is optional; pass the set being renamed to avoid
+// treating its current title as a collision.
+export async function getAllSetNamesInFolder(folderName, excludeSetId = null) {
+  try {
+    const raw = await AsyncStorage.getItem(STORAGE_KEY);
+    const sets = raw ? JSON.parse(raw) : [];
+    return sets
+      .filter((s) => s.folder === folderName && s.id !== excludeSetId)
+      .map((s) => s.title);
+  } catch (e) {
+    console.error("Error getting set names in folder:", e);
+    return [];
+  }
+}
+
+// Rename a single set by id; returns the updated set
+export async function renameSet(setId, newTitle) {
+  try {
+    const raw = await AsyncStorage.getItem(STORAGE_KEY);
+    const sets = raw ? JSON.parse(raw) : [];
+    const updated = sets.map((s) =>
+      s.id === setId ? { ...s, title: newTitle } : s
+    );
+    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    return updated.find((s) => s.id === setId);
+  } catch (e) {
+    console.error("Error renaming set:", e);
+    return null;
   }
 }

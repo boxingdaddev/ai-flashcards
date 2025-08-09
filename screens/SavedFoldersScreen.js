@@ -11,12 +11,18 @@ import {
   View,
 } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
+
+import RenameModal from "../components/RenameModal";
+import { getNextAvailableName, normalizeSpace } from "../utils/naming.js";
+
 import {
-  createNewFolder,
   deleteFolder,
+  getAllFolderNamesExcluding,
+  getNextDefaultFolderName,
   getTotalCardsGenerated,
   loadFolders,
   saveFlashcardSet,
+  renameFolder as storageRenameFolder,
 } from "../utils/storage";
 
 export default function SavedFoldersScreen() {
@@ -25,14 +31,22 @@ export default function SavedFoldersScreen() {
   const [usageCount, setUsageCount] = useState(0);
   const navigation = useNavigation();
 
+  // Modal state
+  const [modalVisible, setModalVisible] = useState(false);
+  const [modalTitle, setModalTitle] = useState("");
+  const [modalMessage, setModalMessage] = useState("");
+  const [modalInitial, setModalInitial] = useState("");
+  const [modalMode, setModalMode] = useState(null); // "create" | "rename"
+  const [renameTarget, setRenameTarget] = useState(null); // oldName for rename
+
   useEffect(() => {
-    const unsubscribe = navigation.addListener("focus", () => {
+    const unsub = navigation.addListener("focus", () => {
       fetchFolders();
       fetchUsageCount();
     });
     fetchFolders();
     fetchUsageCount();
-    return unsubscribe;
+    return unsub;
   }, [navigation]);
 
   const fetchFolders = async () => {
@@ -42,23 +56,64 @@ export default function SavedFoldersScreen() {
 
   const fetchUsageCount = async () => {
     const count = await getTotalCardsGenerated();
-    console.log("📊 Usage count fetched in Folders:", count);
     setUsageCount(count);
   };
 
+  // --- Add Folder flow ---
   const handleAddFolder = async () => {
-    const newFolderName = await createNewFolder();
+    const suggestion = await getNextDefaultFolderName();
+    setModalTitle("Create Folder");
+    setModalMessage("Name your folder:");
+    setModalInitial(suggestion);
+    setModalMode("create");
+    setRenameTarget(null);
+    setModalVisible(true);
+  };
 
-    const dummySet = {
-      id: Date.now(),
-      folder: newFolderName,
-      title: `${newFolderName} (empty)`,
-      cards: [],
-      createdAt: new Date().toISOString(),
-    };
+  // --- Rename Folder flow ---
+  const handleRenameFolder = async (oldName) => {
+    setModalTitle("Rename Folder");
+    setModalMessage(`Rename "${oldName}" to:`);
+    setModalInitial(oldName);
+    setModalMode("rename");
+    setRenameTarget(oldName);
+    setModalVisible(true);
+  };
 
-    await saveFlashcardSet(dummySet);
-    fetchFolders();
+  const onModalCancel = () => {
+    setModalVisible(false);
+  };
+
+  const onModalConfirm = async (text) => {
+    const input = normalizeSpace(text);
+    setModalVisible(false);
+
+    if (modalMode === "create") {
+      const existing = await loadFolders();
+      const base = input || (await getNextDefaultFolderName());
+      const name = getNextAvailableName(base, existing);
+
+      // Create placeholder set so folder appears
+      const dummySet = {
+        id: Date.now(),
+        folder: name,
+        title: `${name} (empty)`,
+        cards: [],
+        createdAt: new Date().toISOString(),
+      };
+      await saveFlashcardSet(dummySet);
+      fetchFolders();
+      return;
+    }
+
+    if (modalMode === "rename" && renameTarget) {
+      const existing = await getAllFolderNamesExcluding(renameTarget);
+      const safe = getNextAvailableName(input || renameTarget, existing);
+      if (safe !== renameTarget) {
+        await storageRenameFolder(renameTarget, safe);
+        fetchFolders();
+      }
+    }
   };
 
   const handleFolderPress = (folderName) => {
@@ -76,26 +131,38 @@ export default function SavedFoldersScreen() {
           style: "destructive",
           onPress: async () => {
             await deleteFolder(folderName);
-            const updatedFolders = await loadFolders();
-            setFolders([...updatedFolders]); // refresh UI
+            fetchFolders();
           },
         },
       ]
     );
   };
 
-  const renderRightActions = (onPress) => (
-    <TouchableOpacity
-      style={{
-        width: "25%",
-        backgroundColor: "red",
-        justifyContent: "center",
-        alignItems: "center",
-      }}
-      onPress={onPress}
-    >
-      <Ionicons name="trash-outline" size={24} color="#fff" />
-    </TouchableOpacity>
+  const renderRightActions = (onDelete, onRename) => (
+    <View style={{ flexDirection: "row", width: "40%" }}>
+      <TouchableOpacity
+        style={{
+          flex: 1,
+          backgroundColor: "#64748b",
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+        onPress={onRename}
+      >
+        <Ionicons name="create-outline" size={22} color="#fff" />
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={{
+          flex: 1,
+          backgroundColor: "red",
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+        onPress={onDelete}
+      >
+        <Ionicons name="trash-outline" size={22} color="#fff" />
+      </TouchableOpacity>
+    </View>
   );
 
   return (
@@ -112,10 +179,16 @@ export default function SavedFoldersScreen() {
         renderItem={({ item }) => (
           <Swipeable
             renderRightActions={() =>
-              renderRightActions(() => handleDeleteFolder(item))
+              renderRightActions(
+                () => handleDeleteFolder(item),
+                () => handleRenameFolder(item)
+              )
             }
           >
-            <TouchableOpacity onPress={() => handleFolderPress(item)}>
+            <TouchableOpacity
+              onPress={() => handleFolderPress(item)}
+              onLongPress={() => handleRenameFolder(item)}
+            >
               <View style={styles.row}>
                 <Text>{item}</Text>
               </View>
@@ -130,6 +203,15 @@ export default function SavedFoldersScreen() {
       <TouchableOpacity style={styles.addButton} onPress={handleAddFolder}>
         <Text style={styles.addButtonText}>+</Text>
       </TouchableOpacity>
+
+      <RenameModal
+        visible={modalVisible}
+        title={modalTitle}
+        message={modalMessage}
+        initialValue={modalInitial}
+        onCancel={onModalCancel}
+        onConfirm={onModalConfirm}
+      />
     </View>
   );
 }
@@ -144,36 +226,18 @@ const styles = StyleSheet.create({
     borderBottomColor: "#ccc",
     width: "100%",
   },
-  container: {
-    flex: 1,
-    padding: 20,
-    backgroundColor: "#fff",
-  },
+  container: { flex: 1, padding: 20, backgroundColor: "#fff" },
   titleRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     marginBottom: 20,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: "bold",
-  },
+  title: { fontSize: 24, fontWeight: "bold" },
   usage: {
     fontSize: 16,
     fontWeight: "bold",
     color: "#888",
     alignSelf: "center",
-  },
-  folderCard: {
-    padding: 15,
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 8,
-    marginBottom: 10,
-  },
-  folderName: {
-    fontSize: 18,
-    fontWeight: "bold",
   },
   addButton: {
     position: "absolute",
@@ -187,9 +251,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
     elevation: 5,
   },
-  addButtonText: {
-    color: "#fff",
-    fontSize: 28,
-    fontWeight: "bold",
-  },
+  addButtonText: { color: "#fff", fontSize: 28, fontWeight: "bold" },
 });

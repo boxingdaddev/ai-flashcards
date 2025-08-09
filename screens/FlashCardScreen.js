@@ -16,9 +16,13 @@ import {
   View,
 } from "react-native";
 import { generateFlashcardsFromText } from "../utils/ai";
+
+import { getNextAvailableName } from "../utils/naming.js";
+
 import {
   clearAllSets,
   clearTotalCardsGenerated,
+  getAllSetNamesInFolder,
   getTotalCardsGenerated,
   incrementTotalCardsGenerated,
   saveFlashcardSet,
@@ -58,10 +62,23 @@ export default function FlashCardScreen() {
     const cards = await generateFlashcardsFromText(inputText);
 
     if (cards.length > 0) {
+      // --- Neutral, clean, unique title: "Flashcards – <date> <time>" ---
+      const now = new Date();
+      const dateStr = now.toLocaleDateString(); // e.g., 8/9/2025
+      const timeStr = now.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }); // e.g., 02:31 PM
+      const base = `Flashcards – ${dateStr} ${timeStr}`;
+
+      // Ensure no duplicates inside this folder (unlikely with time, but safe)
+      const existing = await getAllSetNamesInFolder(folder);
+      const title = getNextAvailableName(base, existing).slice(0, 60);
+
       const setToSave = {
         id: Date.now(),
         folder,
-        title: inputText.substring(0, 30) || "Untitled",
+        title,
         cards,
         createdAt: new Date().toISOString(),
       };
@@ -69,7 +86,16 @@ export default function FlashCardScreen() {
       await saveFlashcardSet(setToSave);
       await incrementTotalCardsGenerated(cards.length);
       setFlashcards(cards);
-      navigation.navigate("SetDetails", { set: setToSave });
+
+      // --- Flow: SavedFolders -> SavedSets -> SetDetails (study) ---
+      navigation.reset({
+        index: 2,
+        routes: [
+          { name: "SavedFolders" }, // base
+          { name: "SavedSets", params: { folder } }, // middle
+          { name: "SetDetails", params: { set: setToSave } }, // top (study screen)
+        ],
+      });
     }
 
     setLoading(false);
