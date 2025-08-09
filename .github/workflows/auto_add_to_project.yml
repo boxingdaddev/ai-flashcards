@@ -1,58 +1,104 @@
-name: Auto-add v0.3.1 Issues to Project
+name: Auto-add versioned issues to Projects v2
 
 on:
   issues:
     types: [opened, labeled]
 
+# Configure once; reuse for all versions. Title becomes "StudyBuddy v0.3.2", etc.
+env:
+  PROJECT_PREFIX: "StudyBuddy "
+  PROJECT_SUFFIX: ""
+
+permissions:
+  contents: read
+  issues: write
+  projects: write
+
 jobs:
   add-to-project:
-    # Only run when the label v0.3.1 is applied or the issue is created with it
+    # Only run if the issue has (or was just given) a semver-like label vX.Y.Z
     if: >
-      contains(github.event.issue.labels.*.name, 'v0.3.1') ||
-      github.event.label.name == 'v0.3.1'
+      contains(join(github.event.issue.labels.*.name, ' '), 'v') ||
+      github.event.action == 'labeled'
     runs-on: ubuntu-latest
-    permissions:
-      issues: write
-      contents: read
-      projects: write
 
     steps:
-      - name: Get Project ID
-        id: get_project
+      - name: Determine version label on this issue
+        id: pick
         run: |
-          OWNER_LOGIN="${{ github.repository_owner }}"
-          PROJECT_TITLE="StudyBuddy v0.3.1"
-          # Fetch Projects v2 for the user
-          PROJECT_ID=$(gh api graphql -f login="$OWNER_LOGIN" -f query='
+          # Gather existing labels
+          LABELS_JSON='${{ toJson(github.event.issue.labels.*.name) }}'
+          VERSIONS=$(echo "$LABELS_JSON" | jq -r '.[] | select(test("^v[0-9]+\\.[0-9]+\\.[0-9]+$"))' || true)
+
+          # If we just added a label, prefer that one if it matches
+          if [ "${{ github.event.action }}" = "labeled" ]; then
+            NEW="${{ github.event.label.name }}"
+            if echo "$NEW" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+              VERSIONS="$NEW"
+            fi
+          fi
+
+          if [ -z "$VERSIONS" ]; then
+            echo "No version label (vX.Y.Z) found. Exiting."
+            echo "skip=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          VERSION=$(echo "$VERSIONS" | head -n1)
+          echo "Using VERSION=$VERSION"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Stop if no version
+        if: steps.pick.outputs.skip == 'true'
+        run: echo "No-op."
+
+      - name: Find or create Projects v2 board
+        id: proj
+        if: steps.pick.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          OWNER="${{ github.repository_owner }}"
+          TITLE="${PROJECT_PREFIX}${{ steps.pick.outputs.version }}${PROJECT_SUFFIX}"
+
+          # Look for an existing user project with that title
+          PID=$(gh api graphql -F login="$OWNER" -f query='
             query($login:String!) {
               user(login:$login) {
-                projectsV2(first:100) {
-                  nodes { id title number }
-                }
+                projectsV2(first:100) { nodes { id title number } }
               }
-            }' --jq ".data.user.projectsV2.nodes[] | select(.title==\"$PROJECT_TITLE\") | .id")
-          if [ -z "$PROJECT_ID" ]; then
-            echo "Project not found"
-            exit 1
+            }' --jq '.data.user.projectsV2.nodes[] | select(.title=="'"$TITLE"'") | .id' || true)
+
+          if [ -z "$PID" ]; then
+            echo "Creating project: $TITLE"
+            OWNER_ID=$(gh api graphql -f query='query { viewer { id } }' --jq '.data.viewer.id')
+            PID=$(gh api graphql -F ownerId="$OWNER_ID" -F title="$TITLE" -f query='
+              mutation($ownerId:ID!, $title:String!) {
+                createProjectV2(input:{ownerId:$ownerId, title:$title}) { projectV2 { id number } }
+              }' --jq '.data.createProjectV2.projectV2.id')
+          else
+            echo "Found project id: $PID"
           fi
-          echo "project_id=$PROJECT_ID" >> $GITHUB_OUTPUT
+
+          echo "project_id=$PID" >> $GITHUB_OUTPUT
+          echo "project_title=$TITLE" >> $GITHUB_OUTPUT
+
+      - name: Add this issue to the project
+        if: steps.pick.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Add Issue to Project
         run: |
-          ISSUE_NODE_ID=$(gh api graphql -f owner="${{ github.repository_owner }}" -f repo="$(basename ${{ github.repository }})" -F number="${{ github.event.issue.number }}" -f query='
+          OWNER="${{ github.repository_owner }}"
+          REPO="${{ github.event.repository.name }}"
+          NUM="${{ github.event.issue.number }}"
+
+          ISSUE_ID=$(gh api graphql -F owner="$OWNER" -F repo="$REPO" -F number="$NUM" -f query='
             query($owner:String!, $repo:String!, $number:Int!) {
-              repository(owner:$owner, name:$repo) {
-                issue(number:$number) { id }
-              }
+              repository(owner:$owner, name:$repo) { issue(number:$number) { id } }
             }' --jq '.data.repository.issue.id')
 
-          gh api graphql -F projectId="${{ steps.get_project.outputs.project_id }}" -F contentId="$ISSUE_NODE_ID" -f query='
+          gh api graphql -F projectId="${{ steps.proj.outputs.project_id }}" -F contentId="$ISSUE_ID" -f query='
             mutation($projectId:ID!, $contentId:ID!) {
-              addProjectV2ItemById(input:{projectId:$projectId, contentId:$contentId}) {
-                item { id }
-              }
+              addProjectV2ItemById(input:{projectId:$projectId, contentId:$contentId}) { item { id } }
             }'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
